@@ -1,0 +1,8 @@
+{
+  "name": "EduPlatform",
+  "description": "Modern educational learning management platform with course tracking, interactive lessons, calendar scheduling, notes, and study statistics.",
+  "requestFramePermissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
