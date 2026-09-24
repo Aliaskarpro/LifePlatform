@@ -16,9 +16,10 @@ import {
 } from 'lucide-react';
 import { useLifeStore, calculateBmi } from '../store/lifeStore';
 import { useAuthStore } from '../store/authStore';
+import { userService } from '../services/dataServices';
 
 export const AccountPage: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const { 
     anthropometry, 
     updateAnthropometry, 
@@ -27,23 +28,25 @@ export const AccountPage: React.FC = () => {
     resetToDefaultData 
   } = useLifeStore();
 
-  const [firstName, setFirstName] = useState(user?.firstName || 'Алекс');
-  const [lastName, setLastName] = useState(user?.lastName || 'Волков');
-  const [email, setEmail] = useState(user?.email || 'alex.volkov@example.com');
+  const [firstName, setFirstName] = useState(user?.firstName || '');
+  const [lastName, setLastName] = useState(user?.lastName || '');
+  const [email, setEmail] = useState(user?.email || '');
 
   const [height, setHeight] = useState(anthropometry.heightCm.toString());
   const [targetWeight, setTargetWeight] = useState(anthropometry.targetWeightKg.toString());
-  const [bloodType, setBloodType] = useState(anthropometry.bloodType || 'A (II)');
-  const [birthDate, setBirthDate] = useState(anthropometry.birthDate || '1995-05-14');
-  const [gender, setGender] = useState<'male' | 'female' | 'other'>(anthropometry.gender || 'male');
+  const [bloodType, setBloodType] = useState(anthropometry.bloodType || '');
+  const [birthDate, setBirthDate] = useState(anthropometry.birthDate || '');
+  const [gender, setGender] = useState<'male' | 'female' | 'other'>(anthropometry.gender || 'other');
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
   const bmiInfo = calculateBmi(anthropometry.currentWeightKg, anthropometry.heightCm);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError('');
     updateAnthropometry({
       heightCm: parseInt(height) || anthropometry.heightCm,
       targetWeightKg: parseFloat(targetWeight) || anthropometry.targetWeightKg,
@@ -51,12 +54,24 @@ export const AccountPage: React.FC = () => {
       birthDate,
       gender,
     });
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    try {
+      const updated = await userService.updateProfile({ first_name: firstName, last_name: lastName });
+      if (user) setUser({
+        ...user,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        email: updated.email,
+        avatarUrl: updated.avatarUrl,
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch {
+      setSaveError('Не удалось сохранить профиль. Проверьте соединение с сервером.');
+    }
   };
 
   const handleExportData = () => {
-    const raw = localStorage.getItem('eduplatform_life_data_v1');
+    const raw = localStorage.getItem(`eduplatform_life_data_v2_${user?.id}`);
     const blob = new Blob([raw || '{}'], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -67,7 +82,7 @@ export const AccountPage: React.FC = () => {
   };
 
   const handleResetData = () => {
-    if (confirm('Сбросить все персональные данные к демонстрационным значениям по умолчанию?')) {
+    if (confirm('Удалить все записи этого аккаунта и очистить личные данные?')) {
       resetToDefaultData();
       setResetSuccess(true);
       setTimeout(() => setResetSuccess(false), 3000);
@@ -96,11 +111,12 @@ export const AccountPage: React.FC = () => {
       {resetSuccess && (
         <div className="p-3 bg-indigo-950/40 border border-indigo-800 text-indigo-400 text-xs rounded-xl flex items-center space-x-2">
           <Sparkles size={16} />
-          <span>Данные успешно сброшены до эталонного набора!</span>
+          <span>Личные данные очищены.</span>
         </div>
       )}
 
       <form onSubmit={handleSaveProfile} className="space-y-6">
+        {saveError && <p role="alert" className="rounded-lg border border-rose-800 bg-rose-950/30 p-3 text-sm text-rose-400">{saveError}</p>}
         {/* Section 1: Basic User Data */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
           <h2 className="text-base font-semibold text-white flex items-center space-x-2">
@@ -195,6 +211,7 @@ export const AccountPage: React.FC = () => {
                 onChange={(e) => setBloodType(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
               >
+                <option value="">Не указано</option>
                 <option value="O (I)">O (I) Rh+</option>
                 <option value="A (II)">A (II) Rh+</option>
                 <option value="B (III)">B (III) Rh+</option>
@@ -288,7 +305,7 @@ export const AccountPage: React.FC = () => {
               className="px-4 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-900 transition-colors flex items-center space-x-2"
             >
               <RotateCcw size={14} />
-              <span>Сбросить к исходным демо-данным</span>
+              <span>Очистить личные данные</span>
             </button>
           </div>
         </div>

@@ -23,6 +23,7 @@ import { AccountPage } from './pages/AccountPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { ClassesPage } from './pages/ClassesPage';
 import { LessonDetailPage } from './pages/LessonDetailPage';
+import { AdminPage } from './pages/AdminPage';
 import { ToastContainer } from './components/ui/Toast';
 
 export default function App() {
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="notes" element={<NotesPage />} />
           <Route path="finance" element={<FinancePage />} />
           <Route path="account" element={<AccountPage />} />
+          <Route path="admin" element={<AdminPage />} />
 
           {/* Backward compatibility routes */}
           <Route path="schedule" element={<SchedulePage />} />

@@ -1,4 +1,5 @@
 // Sound & Notification Service for iOS PWA and Modern Browsers
+import { storage } from '../utils/storage';
 
 export interface ReminderSettings {
   enabled: boolean;
@@ -42,32 +43,48 @@ export interface NotificationHistoryItem {
 
 class NotificationService {
   private settings: ReminderSettings;
+  private settingsOwnerId: string | null;
   private timerId: number | null = null;
   private audioCtx: AudioContext | null = null;
 
   constructor() {
-    this.settings = this.loadSettings();
+    this.settingsOwnerId = storage.getUser()?.id || null;
+    this.settings = this.loadSettings(this.settingsOwnerId);
     if (typeof window !== 'undefined') {
       this.initBackgroundCheck();
     }
   }
 
   public getSettings(): ReminderSettings {
+    this.syncSettingsOwner();
     return { ...this.settings };
   }
 
   public saveSettings(newSettings: Partial<ReminderSettings>) {
+    this.syncSettingsOwner();
     this.settings = { ...this.settings, ...newSettings };
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
+      localStorage.setItem(this.storageKey(STORAGE_KEY), JSON.stringify(this.settings));
     }
     return this.settings;
   }
 
-  private loadSettings(): ReminderSettings {
+  private storageKey(key: string, userId = storage.getUser()?.id || null): string {
+    return `${key}:${userId || 'anonymous'}`;
+  }
+
+  private syncSettingsOwner() {
+    const userId = storage.getUser()?.id || null;
+    if (userId !== this.settingsOwnerId) {
+      this.settingsOwnerId = userId;
+      this.settings = this.loadSettings(userId);
+    }
+  }
+
+  private loadSettings(userId: string | null): ReminderSettings {
     if (typeof window === 'undefined') return DEFAULT_REMINDER_SETTINGS;
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(this.storageKey(STORAGE_KEY, userId));
       if (stored) {
         return { ...DEFAULT_REMINDER_SETTINGS, ...JSON.parse(stored) };
       }
@@ -230,7 +247,7 @@ class NotificationService {
   public getHistory(): NotificationHistoryItem[] {
     if (typeof window === 'undefined') return [];
     try {
-      const stored = localStorage.getItem(HISTORY_KEY);
+      const stored = localStorage.getItem(this.storageKey(HISTORY_KEY));
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -242,7 +259,7 @@ class NotificationService {
     try {
       const history = this.getHistory();
       const updated = [item, ...history].slice(0, 30);
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      localStorage.setItem(this.storageKey(HISTORY_KEY), JSON.stringify(updated));
     } catch (e) {
       console.error('Failed to record notification history', e);
     }
@@ -250,7 +267,7 @@ class NotificationService {
 
   public clearHistory() {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(HISTORY_KEY);
+      localStorage.removeItem(this.storageKey(HISTORY_KEY));
     }
   }
 

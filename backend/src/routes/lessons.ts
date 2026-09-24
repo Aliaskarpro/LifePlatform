@@ -4,33 +4,38 @@ import { authenticateToken } from '../middleware/auth';
 import { AuthRequest } from '../types';
 
 const router = Router();
+router.use(authenticateToken);
 
-router.get('/', async (req, res, next) => {
+router.get('/', async (req: AuthRequest, res, next) => {
   try {
     const { course_id } = req.query;
-    let query = 'SELECT id, course_id, title, description, duration_minutes, order_index FROM lessons';
-    let params: any[] = [];
+    let query = `SELECT l.id, l.course_id, l.title, l.description, l.duration_minutes, l.order_index
+      FROM lessons l JOIN courses c ON c.id = l.course_id WHERE (c.is_published = true OR $1 = true)`;
+    let params: any[] = [req.user?.role === 'admin'];
     if (course_id) {
-      query += ' WHERE course_id = $1';
+      query += ' AND l.course_id = $2';
       params.push(course_id);
     }
-    query += ' ORDER BY order_index';
+    query += ' ORDER BY l.order_index';
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) { next(err); }
 });
 
-router.get('/user/progress', authenticateToken, async (req: AuthRequest, res, next) => {
+router.get('/user/progress', async (req: AuthRequest, res, next) => {
   try {
     const result = await pool.query('SELECT * FROM lesson_progress WHERE user_id = $1', [req.user?.id]);
     res.json(result.rows);
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
+router.get('/:id', async (req: AuthRequest, res, next) => {
   try {
     const { id } = req.params;
-    const lessonRes = await pool.query('SELECT * FROM lessons WHERE id = $1', [id]);
+    const lessonRes = await pool.query(`
+      SELECT l.* FROM lessons l JOIN courses c ON c.id = l.course_id
+      WHERE l.id = $1 AND (c.is_published = true OR $2 = true)
+    `, [id, req.user?.role === 'admin']);
     if (lessonRes.rows.length === 0) return res.status(404).json({ message: 'Lesson not found' });
     
     const progressRes = await pool.query('SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2', [req.user?.id, id]);
@@ -42,10 +47,14 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/:id/progress', authenticateToken, async (req: AuthRequest, res, next) => {
+router.put('/:id/progress', async (req: AuthRequest, res, next) => {
   try {
     const { id } = req.params;
     const { status, notes } = req.body;
+    const previous = await pool.query(
+      'SELECT status FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+      [req.user?.id, id]
+    );
     
     const result = await pool.query(`
       INSERT INTO lesson_progress (user_id, lesson_id, status, notes, completed_at)
@@ -56,8 +65,13 @@ router.put('/:id/progress', authenticateToken, async (req: AuthRequest, res, nex
     `, [req.user?.id, id, status, notes]);
     
     // update user overall progress
-    if (status === 'completed') {
-      await pool.query('UPDATE user_progress SET completed_lessons = completed_lessons + 1 WHERE user_id = $1', [req.user?.id]);
+    if (status === 'completed' && previous.rows[0]?.status !== 'completed') {
+      await pool.query(`
+        INSERT INTO user_progress (user_id, completed_lessons)
+        VALUES ($1, 1)
+        ON CONFLICT (user_id) DO UPDATE
+        SET completed_lessons = user_progress.completed_lessons + 1, updated_at = NOW()
+      `, [req.user?.id]);
     }
 
     res.json(result.rows[0]);

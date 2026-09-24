@@ -29,7 +29,7 @@ export const RegisterPage: React.FC = () => {
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight text-white">Create an account</h2>
-        <p className="mt-2 text-sm text-slate-400">Join EduPlatform today</p>
+        <p className="mt-2 text-sm text-slate-400">Создайте личное пространство LifePlatform</p>
       </div>
       {error && <div className="rounded-md bg-red-500/10 p-3 text-sm text-red-500 border border-red-500/20">{error}</div>}
       <form className="space-y-4" onSubmit={handleSubmit}>

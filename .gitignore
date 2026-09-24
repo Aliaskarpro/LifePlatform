@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+.vercel/
+.netlify/
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example

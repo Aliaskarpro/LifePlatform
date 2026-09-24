@@ -5,7 +5,7 @@ export interface User {
   firstName: string;
   lastName: string;
   avatarUrl?: string;
-  role: 'student' | 'teacher' | 'admin';
+  role: 'user' | 'admin';
   subscriptionTier: 'free' | 'premium' | 'enterprise';
   createdAt: string;
 }

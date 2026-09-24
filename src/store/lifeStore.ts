@@ -27,9 +27,12 @@ import {
   CurrencyCode
 } from '../types';
 import { INITIAL_LIFE_DATA } from '../utils/initialLifeData';
+import apiClient from '../services/api';
+import { storage } from '../utils/storage';
 
-const STORAGE_KEY = 'eduplatform_life_data_v1';
+const STORAGE_KEY = 'eduplatform_life_data_v2';
 const THEME_KEY = 'eduplatform_theme';
+const saveQueues = new Map<string, Promise<void>>();
 
 export interface BmiInfo {
   bmi: number;
@@ -59,6 +62,9 @@ export const calculateBmi = (weightKg: number, heightCm: number): BmiInfo => {
 interface LifeStoreState extends LifeData {
   theme: 'dark' | 'light';
   isLoaded: boolean;
+  activeDataUserId: string | null;
+  loadForUser: (userId: string) => Promise<void>;
+  clearPersonalData: () => void;
   
   // Theme
   toggleTheme: () => void;
@@ -141,21 +147,38 @@ interface LifeStoreState extends LifeData {
   resetToDefaultData: () => void;
 }
 
-const getStoredData = (): LifeData => {
+const storageKeyForUser = (userId: string) => `${STORAGE_KEY}_${userId}`;
+
+const mergeLifeData = (data: Partial<LifeData> | null | undefined): LifeData => ({
+  anthropometry: { ...INITIAL_LIFE_DATA.anthropometry, ...(data?.anthropometry || {}) },
+  weightHistory: data?.weightHistory || [],
+  vitalsHistory: data?.vitalsHistory || [],
+  chronicConditions: data?.chronicConditions || [],
+  allergies: data?.allergies || [],
+  pastIllnesses: data?.pastIllnesses || [],
+  medications: data?.medications || [],
+  labResults: data?.labResults || [],
+  doctorVisits: data?.doctorVisits || [],
+  sleepHistory: data?.sleepHistory || [],
+  sleepGoal: { ...INITIAL_LIFE_DATA.sleepGoal, ...(data?.sleepGoal || {}) },
+  workoutsHistory: data?.workoutsHistory || [],
+  activityGoal: { ...INITIAL_LIFE_DATA.activityGoal, ...(data?.activityGoal || {}) },
+  habits: data?.habits || [],
+  goals: data?.goals || [],
+  calendarEvents: data?.calendarEvents || [],
+  notes: data?.notes || [],
+  tasks: data?.tasks || [],
+  finance: { ...INITIAL_LIFE_DATA.finance, ...(data?.finance || {}) },
+});
+
+const getStoredData = (userId: string): LifeData | null => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const tasks = parsed.tasks && parsed.tasks.length > 0 ? parsed.tasks : (INITIAL_LIFE_DATA.tasks || []);
-      const finance = parsed.finance && parsed.finance.accounts && parsed.finance.accounts.length > 0
-        ? parsed.finance
-        : INITIAL_LIFE_DATA.finance;
-      return { ...INITIAL_LIFE_DATA, ...parsed, tasks, finance };
-    }
+    const raw = localStorage.getItem(storageKeyForUser(userId));
+    return raw ? mergeLifeData(JSON.parse(raw)) : null;
   } catch (e) {
     console.error('Failed to load life data from localStorage:', e);
   }
-  return INITIAL_LIFE_DATA;
+  return null;
 };
 
 const getInitialTheme = (): 'dark' | 'light' => {
@@ -169,15 +192,30 @@ const getInitialTheme = (): 'dark' | 'light' => {
 };
 
 const saveToStorage = (state: LifeData) => {
+  const currentUser = storage.getUser();
+  const token = storage.getToken();
+  if (!currentUser?.id) return;
+  const data = mergeLifeData(state);
+
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(storageKeyForUser(currentUser.id), JSON.stringify(data));
   } catch (e) {
     console.error('Failed to save life data to localStorage:', e);
   }
+
+  if (!token) return;
+  const previous = saveQueues.get(currentUser.id) || Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => apiClient.put('/api/life-data', { data }, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(() => undefined));
+  saveQueues.set(currentUser.id, next);
+  next.catch((error) => console.error('Failed to sync life data with the server:', error));
 };
 
 export const useLifeStore = create<LifeStoreState>((set, get) => {
-  const initial = getStoredData();
+  const initial = INITIAL_LIFE_DATA;
   const initialTheme = getInitialTheme();
 
   // Apply theme to document element
@@ -195,6 +233,25 @@ export const useLifeStore = create<LifeStoreState>((set, get) => {
     ...initial,
     theme: initialTheme,
     isLoaded: true,
+    activeDataUserId: null,
+    loadForUser: async (userId) => {
+      const state = get();
+      if (state.activeDataUserId === userId) return;
+      set({ ...INITIAL_LIFE_DATA, isLoaded: false, activeDataUserId: userId });
+      try {
+        const { data } = await apiClient.get('/api/life-data');
+        if (get().activeDataUserId !== userId) return;
+        const personalData = mergeLifeData(data);
+        try { localStorage.setItem(storageKeyForUser(userId), JSON.stringify(personalData)); } catch {}
+        set({ ...personalData, isLoaded: true, activeDataUserId: userId });
+      } catch (error) {
+        if (get().activeDataUserId !== userId) return;
+        const cached = getStoredData(userId);
+        set({ ...(cached || INITIAL_LIFE_DATA), isLoaded: true, activeDataUserId: userId });
+        if (!cached) console.error('Failed to load life data from the server:', error);
+      }
+    },
+    clearPersonalData: () => set({ ...INITIAL_LIFE_DATA, isLoaded: true, activeDataUserId: null }),
 
     toggleTheme: () => {
       const current = get().theme;
@@ -683,7 +740,7 @@ export const useLifeStore = create<LifeStoreState>((set, get) => {
       set((state) => {
         const newNote: Note = {
           id: `nt-${Date.now()}`,
-          userId: 'user-1',
+          userId: storage.getUser()?.id || '',
           ...note,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

@@ -41,8 +41,8 @@ export default defineConfig({
       },
       manifest: {
         id: '/',
-        name: 'EduPlatform - Health & Life Management',
-        short_name: 'EduPlatform',
+        name: 'LifePlatform — личный кабинет',
+        short_name: 'LifePlatform',
         description: 'Персональная платформа для трекинга здоровья, привычек, фокусных задач и капитала',
         theme_color: '#0f172a',
         background_color: '#0f172a',

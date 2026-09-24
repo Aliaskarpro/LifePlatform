@@ -137,10 +137,10 @@ export const DashboardPage: React.FC = () => {
               <span>{capitalizedDate}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight font-display">
-              Добрый день, {user?.firstName || 'Алекс'}! 👋
+              Добрый день{user?.firstName ? `, ${user.firstName}` : ''}! 👋
             </h1>
             <p className="text-slate-300 text-sm mt-1 max-w-xl">
-              Ваш персональный центр здоровья и продуктивности. Все ключевые показатели в норме. Сегодня запланировано {todayEvents.length} событий.
+              Ваш личный центр здоровья и продуктивности. Сегодня запланировано {todayEvents.length} событий.
             </p>
           </div>
 

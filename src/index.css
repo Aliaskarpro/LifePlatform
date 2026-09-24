@@ -18,6 +18,36 @@
 
   html {
     @apply scroll-smooth;
+    min-height: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+body, #root {
+    min-height: 100%;
+  }
+
+  .app-shell {
+    height: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    .app-shell {
+      height: 100dvh;
+    }
+  }
+
+  body {
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+  }
+
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+
+  input, select, textarea {
+    max-width: 100%;
+    font-size: 16px;
   }
 
   ::-webkit-scrollbar {
@@ -50,6 +80,14 @@
   html:not(.dark) input[type="time"],
   html:not(.dark) input[type="datetime-local"] {
     color-scheme: light;
+  }
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 

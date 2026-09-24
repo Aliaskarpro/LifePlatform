@@ -24,12 +24,13 @@ router.get('/', async (req: AuthRequest, res, next) => {
 router.get('/:id', async (req: AuthRequest, res, next) => {
   try {
     const { id } = req.params;
+    const isAdmin = req.user?.role === 'admin';
     const courseRes = await pool.query(`
       SELECT c.*, l.name as level_name 
       FROM courses c 
       LEFT JOIN levels l ON c.level_id = l.id 
-      WHERE c.id = $1
-    `, [id]);
+      WHERE c.id = $1 AND (c.is_published = true OR $2 = true)
+    `, [id, isAdmin]);
     if (courseRes.rows.length === 0) return res.status(404).json({ message: 'Course not found' });
     
     const lessonsRes = await pool.query('SELECT id, title, description, duration_minutes, order_index FROM lessons WHERE course_id = $1 ORDER BY order_index', [id]);
@@ -42,13 +43,12 @@ router.get('/:id', async (req: AuthRequest, res, next) => {
 
 router.post('/', authenticateToken, async (req: AuthRequest, res, next) => {
   try {
-    if (req.user?.role !== 'admin' && req.user?.role !== 'teacher') {
+    if (req.user?.role !== 'admin') {
       return res.status(403).json({ message: 'Forbidden' });
     }
     const { title, description, level_id, total_lessons, cover_image, is_published } = req.body;
     
-    // For teachers, automatically set teacher_id to their own ID
-    const teacher_id = req.user.role === 'teacher' ? req.user.id : req.body.teacher_id;
+    const teacher_id = req.body.teacher_id;
     
     const result = await pool.query(`
       INSERT INTO courses (title, description, level_id, teacher_id, total_lessons, cover_image, is_published)
@@ -61,27 +61,11 @@ router.post('/', authenticateToken, async (req: AuthRequest, res, next) => {
 
 router.put('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
   try {
-    if (req.user?.role !== 'admin' && req.user?.role !== 'teacher') {
+    if (req.user?.role !== 'admin') {
       return res.status(403).json({ message: 'Forbidden' });
     }
     
     const { id } = req.params;
-    
-    // For teachers: check if they own this course
-    if (req.user.role === 'teacher') {
-      const ownerCheck = await pool.query(
-        'SELECT teacher_id FROM courses WHERE id = $1',
-        [id]
-      );
-      
-      if (ownerCheck.rows.length === 0) {
-        return res.status(404).json({ message: 'Course not found' });
-      }
-      
-      if (ownerCheck.rows[0].teacher_id !== req.user.id) {
-        return res.status(403).json({ message: 'You can only modify your own courses' });
-      }
-    }
     
     const { title, description, level_id, total_lessons, cover_image, is_published } = req.body;
     const result = await pool.query(`

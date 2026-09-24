@@ -99,6 +99,7 @@ router.put('/:id', async (req: AuthRequest, res, next) => {
       WHERE id = $7 AND user_id = $8
       RETURNING *
     `, [title, description, start_time, end_time, status, color, id, req.user?.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Schedule entry not found' });
     res.json(result.rows[0]);
   } catch (err) { next(err); }
 });
@@ -106,7 +107,8 @@ router.put('/:id', async (req: AuthRequest, res, next) => {
 router.delete('/:id', async (req: AuthRequest, res, next) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM schedule WHERE id = $1 AND user_id = $2', [id, req.user?.id]);
+    const result = await pool.query('DELETE FROM schedule WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user?.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Schedule entry not found' });
     res.json({ message: 'Deleted successfully' });
   } catch (err) { next(err); }
 });

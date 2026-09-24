@@ -21,7 +21,8 @@ import {
   Wallet,
   Smartphone,
   Bell,
-  BellRing
+  BellRing,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useLifeStore } from '../store/lifeStore';
@@ -45,6 +46,7 @@ const navItems = [
   { path: '/statistics', icon: BarChart3, label: 'Аналитика', badge: null },
   { path: '/notes', icon: FileText, label: 'Заметки', badge: null },
   { path: '/account', icon: UserIcon, label: 'Профиль', badge: null },
+  { path: '/admin', icon: ShieldCheck, label: 'Администрирование', badge: null },
 ];
 
 export const MainLayout: React.FC = () => {
@@ -68,7 +70,7 @@ export const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
+    <div className="app-shell flex h-screen min-h-0 bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 flex-col border-r border-slate-200 dark:border-slate-800/80 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md shrink-0 transition-colors duration-200">
         <div className="p-5 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
@@ -134,7 +136,7 @@ export const MainLayout: React.FC = () => {
 
         {/* Navigation list */}
         <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
-          {navItems.map((item) => {
+          {navItems.filter((item) => item.path !== '/admin' || user?.role === 'admin').map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname.startsWith(item.path);
             return (
@@ -266,7 +268,7 @@ export const MainLayout: React.FC = () => {
         </header>
 
         {/* Page Content Body */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 bg-slate-50 dark:bg-slate-950 relative transition-colors duration-200">
+        <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 pt-safe sm:p-6 lg:p-8 pb-24 lg:pb-8 bg-slate-50 dark:bg-slate-950 relative transition-colors duration-200">
           {/* Subtle Ambient Glow Orbs */}
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/5 dark:bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none animate-aurora" />
           <div className="absolute top-1/3 right-10 w-80 h-80 bg-emerald-500/5 dark:bg-emerald-500/8 rounded-full blur-[130px] pointer-events-none" />
@@ -288,7 +290,7 @@ export const MainLayout: React.FC = () => {
       </div>
 
       {/* iOS & Mobile Bottom Tab Bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800/80 px-2 py-1.5 flex items-center justify-around shadow-lg transition-colors pb-[env(safe-area-inset-bottom,8px)]">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800/80 px-2 py-1.5 flex items-center justify-around shadow-lg transition-colors pb-safe">
         <Link
           to="/dashboard"
           className={cn(
@@ -410,7 +412,7 @@ export const MainLayout: React.FC = () => {
             </div>
 
             <nav className="flex-1 space-y-1 py-3 overflow-y-auto">
-              {navItems.map((item) => {
+              {navItems.filter((item) => item.path !== '/admin' || user?.role === 'admin').map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname.startsWith(item.path);
                 return (

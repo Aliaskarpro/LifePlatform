@@ -26,24 +26,31 @@ const registerSchema = z.object({
 });
 
 router.post('/register', validate(registerSchema), async (req, res, next) => {
+  let client: Awaited<ReturnType<typeof pool.connect>> | undefined;
   try {
     const { email, password, first_name, last_name } = req.body;
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) return res.status(400).json({ message: 'Email already in use' });
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return res.status(500).json({ message: 'Server configuration error' });
+
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const existing = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Email already in use' });
+    }
 
     const hash = await bcrypt.hash(password, Number(process.env.BCRYPT_ROUNDS) || 12);
-    const result = await pool.query(`
+    const result = await client.query(`
       INSERT INTO users (email, password_hash, first_name, last_name)
       VALUES ($1, $2, $3, $4)
       RETURNING id, email, first_name, last_name, role
     `, [email, hash, first_name, last_name]);
 
     const user = result.rows[0];
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      console.error('CRITICAL: JWT_SECRET not set');
-      return res.status(500).json({ message: 'Server configuration error' });
-    }
+    // Start every account with an explicit empty personal-data document.
+    await client.query("INSERT INTO life_data (user_id, data) VALUES ($1, '{}'::jsonb)", [user.id]);
+    await client.query('COMMIT');
     const expiresIn: string = process.env.JWT_EXPIRES_IN || '7d';
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role }, 
@@ -52,7 +59,13 @@ router.post('/register', validate(registerSchema), async (req, res, next) => {
     );
 
     res.status(201).json({ token, user });
-  } catch (err) { next(err); }
+  } catch (err: any) {
+    if (client) await client.query('ROLLBACK').catch(() => undefined);
+    if (err.code === '23505') return res.status(400).json({ message: 'Email already in use' });
+    next(err);
+  } finally {
+    client?.release();
+  }
 });
 
 const loginSchema = z.object({
@@ -65,12 +78,15 @@ const loginSchema = z.object({
 router.post('/login', validate(loginSchema), async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const result = await pool.query(
+      'SELECT id, email, password_hash, first_name, last_name, avatar_url, role, subscription_tier, is_active, created_at FROM users WHERE email = $1',
+      [email]
+    );
     if (result.rows.length === 0) return res.status(400).json({ message: 'Invalid credentials' });
 
     const user = result.rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(400).json({ message: 'Invalid credentials' });
+    if (!valid || !user.is_active) return res.status(400).json({ message: 'Invalid credentials' });
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {

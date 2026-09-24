@@ -36,6 +36,13 @@ router.get('/', async (req: AuthRequest, res, next) => {
 router.post('/', async (req: AuthRequest, res, next) => {
   try {
     const { schedule_id, title, content, category, tags, is_pinned } = req.body;
+    if (schedule_id) {
+      const ownedSchedule = await pool.query(
+        'SELECT id FROM schedule WHERE id = $1 AND user_id = $2',
+        [schedule_id, req.user?.id]
+      );
+      if (ownedSchedule.rows.length === 0) return res.status(404).json({ message: 'Schedule entry not found' });
+    }
     const result = await pool.query(`
       INSERT INTO notes (user_id, schedule_id, title, content, category, tags, is_pinned)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -69,6 +76,7 @@ router.put('/:id', async (req: AuthRequest, res, next) => {
       WHERE id = $6 AND user_id = $7
       RETURNING *
     `, [title, content, category, tags, is_pinned, id, req.user?.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Note not found' });
     res.json(result.rows[0]);
   } catch (err) { next(err); }
 });
@@ -80,6 +88,7 @@ router.put('/:id/pin', async (req: AuthRequest, res, next) => {
     const result = await pool.query(`
       UPDATE notes SET is_pinned = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3 RETURNING *
     `, [is_pinned, id, req.user?.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Note not found' });
     res.json(result.rows[0]);
   } catch (err) { next(err); }
 });
@@ -87,7 +96,8 @@ router.put('/:id/pin', async (req: AuthRequest, res, next) => {
 router.delete('/:id', async (req: AuthRequest, res, next) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM notes WHERE id = $1 AND user_id = $2', [id, req.user?.id]);
+    const result = await pool.query('DELETE FROM notes WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user?.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Note not found' });
     res.json({ message: 'Deleted successfully' });
   } catch (err) { next(err); }
 });

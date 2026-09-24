@@ -4,11 +4,9 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import http from 'http';
-import cookieParser from 'cookie-parser';
 import { setupWsServer } from './websocket/wsServer';
 import { pool } from './db/pool';
 import { errorHandler } from './middleware/errorHandler';
-import { csrfProtection, csrfTokenGenerator } from './middleware/csrf';
 import { sanitizeMiddleware } from './middleware/sanitize';
 import { transformResponse, transformRequest } from './middleware/transform';
 
@@ -22,6 +20,7 @@ import noteRoutes from './routes/notes';
 import statsRoutes from './routes/statistics';
 import progressRoutes from './routes/progress';
 import adminRoutes from './routes/admin';
+import lifeDataRoutes from './routes/lifeData';
 
 dotenv.config();
 
@@ -32,20 +31,23 @@ const server = http.createServer(app);
 const wss = setupWsServer(server);
 
 // CORS configuration
-const corsOrigin = process.env.CORS_ORIGIN;
-if (!corsOrigin) {
-  console.error('CRITICAL: CORS_ORIGIN environment variable is not set');
-  process.exit(1);
+const configuredOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()).filter(Boolean);
+if (process.env.NODE_ENV === 'production' && !configuredOrigins?.length) {
+  throw new Error('CORS_ORIGIN must contain the public frontend origin in production');
 }
-const allowedOrigins = corsOrigin.split(',').map(o => o.trim());
+const allowedOrigins = configuredOrigins?.length ? configuredOrigins : ['http://localhost:3000', 'http://localhost:5173'];
 
 app.use(helmet());
-app.use(cors({ 
-  origin: allowedOrigins,
-  credentials: true 
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin is not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
 }));
-app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Transform request data from camelCase to snake_case (for DB)
@@ -76,12 +78,6 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
 
-// CSRF token endpoint (must be before CSRF protection)
-app.get('/api/csrf-token', csrfTokenGenerator);
-
-// Apply CSRF protection to all state-changing operations
-app.use('/api/', csrfProtection);
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -93,6 +89,7 @@ app.use('/api/notes', noteRoutes);
 app.use('/api/statistics', statsRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/life-data', lifeDataRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

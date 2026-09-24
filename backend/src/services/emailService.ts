@@ -37,7 +37,7 @@ export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
     }
 
     const mailOptions = {
-      from: process.env.SMTP_FROM || 'noreply@eduplatform.com',
+      from: process.env.SMTP_FROM || 'noreply@lifeplatform.app',
       to: options.to,
       subject: options.subject,
       html: options.html,
@@ -67,13 +67,13 @@ export const sendPasswordResetEmail = async (email: string, resetToken: string):
       <p><strong>This link will expire in 1 hour.</strong></p>
       <p>If you didn't request this, please ignore this email.</p>
       <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-      <p style="color: #6B7280; font-size: 12px;">EduPlatform - Educational Platform</p>
+      <p style="color: #6B7280; font-size: 12px;">LifePlatform</p>
     </div>
   `;
 
   return sendEmail({
     to: email,
-    subject: 'Password Reset Request - EduPlatform',
+    subject: 'Password Reset Request - LifePlatform',
     html,
   });
 };

@@ -30,13 +30,34 @@ async function migrate() {
         first_name VARCHAR(255) NOT NULL,
         last_name VARCHAR(255) NOT NULL,
         avatar_url VARCHAR(255),
-        role VARCHAR(50) DEFAULT 'student',
+        role VARCHAR(50) DEFAULT 'user',
         subscription_tier VARCHAR(50) DEFAULT 'free',
         is_active BOOLEAN DEFAULT true,
         reset_token VARCHAR(255),
         reset_token_expires TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    // Normalize the application roles for existing installations.
+    await client.query(`ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';`);
+    await client.query(`UPDATE users SET role = 'user' WHERE role IS NULL OR role NOT IN ('user', 'admin');`);
+    await client.query(`ALTER TABLE users ALTER COLUMN role SET NOT NULL;`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
+          ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'admin'));
+        END IF;
+      END; $$;
+    `);
+
+    // All personal dashboard data is stored as one user-owned JSON document.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS life_data (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        data JSONB NOT NULL DEFAULT '{}'::jsonb,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
 
@@ -166,6 +187,19 @@ async function migrate() {
       );
     `);
 
+    // New private rows must always have an owner. NOT VALID preserves any
+    // historical orphan rows without allowing future unowned records.
+    for (const table of ['user_progress', 'schedule', 'lesson_progress', 'notes', 'sessions', 'notifications']) {
+      const constraint = `${table}_user_id_present`;
+      await client.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${constraint}') THEN
+            ALTER TABLE ${table} ADD CONSTRAINT ${constraint} CHECK (user_id IS NOT NULL) NOT VALID;
+          END IF;
+        END; $$;
+      `);
+    }
+
     // Create indexes
     await client.query(`CREATE INDEX IF NOT EXISTS idx_user_progress_user_id ON user_progress(user_id);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_courses_level_id ON courses(level_id);`);
@@ -193,6 +227,7 @@ async function migrate() {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Migration failed:', error);
+    process.exitCode = 1;
   } finally {
     client.release();
     pool.end();

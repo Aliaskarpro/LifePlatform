@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "EduPlatform - Health & Life Management",
-  "short_name": "EduPlatform",
+  "name": "LifePlatform — личный кабинет",
+  "short_name": "LifePlatform",
   "description": "Персональная платформа для трекинга здоровья, привычек, фокусных задач и капитала",
   "start_url": "/",
   "scope": "/",

@@ -5,7 +5,7 @@ export interface User {
   first_name: string;
   last_name: string;
   avatar_url?: string;
-  role: 'student' | 'teacher' | 'admin';
+  role: 'user' | 'admin';
   subscription_tier: string;
   is_active: boolean;
   created_at: Date;
@@ -108,6 +108,6 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
-    role: string;
+    role: 'user' | 'admin';
   };
 }

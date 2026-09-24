@@ -30,16 +30,6 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleDemo = () => {
-    setEmail('demo@example.com');
-    setPassword('Demo1234!');
-    setTimeout(() => {
-      authService.login('demo@example.com', 'Demo1234!')
-        .then(data => { setAuth(data.user, data.token); navigate('/dashboard'); })
-        .catch(() => setError('Demo login failed'));
-    }, 500);
-  };
-
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -76,7 +66,6 @@ export const LoginPage: React.FC = () => {
         </div>
 
         <Button type="submit" className="w-full" isLoading={isLoading}>Sign in</Button>
-        <Button type="button" variant="secondary" className="w-full" onClick={handleDemo}>Demo Login</Button>
       </form>
 
       <p className="text-center text-sm text-slate-400">
